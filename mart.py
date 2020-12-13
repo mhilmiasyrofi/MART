@@ -3,6 +3,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
+cifar10_mean = (0.4914, 0.4822, 0.4465) # equals np.mean(train_set.train_data, axis=(0,1,2))/255
+cifar10_std = (0.2471, 0.2435, 0.2616) # equals np.std(train_set.train_data, axis=(0,1,2))/255
+
+mu = torch.tensor(cifar10_mean).view(3,1,1).cuda()
+std = torch.tensor(cifar10_std).view(3,1,1).cuda()
+
+def normalize(X):
+    return (X - mu)/std
+
 
 def mart_loss(model,
               x_natural,
@@ -56,3 +65,50 @@ def mart_loss(model,
     loss = loss_adv + float(beta) * loss_robust
 
     return loss
+
+
+def modified_mart_loss(model,
+                x_natural,
+                x_adv,
+                y,
+                y_adv,
+                optimizer,
+                step_size=0.007,
+                epsilon=0.031,
+                perturb_steps=10,
+                beta=6.0,
+                distance='l_inf'):
+    kl = nn.KLDivLoss(reduction='none')
+    model.eval()
+   
+    batch_size = len(x_natural)
+    # generate adversarial example
+   
+    model.train()
+
+#     x_adv = Variable(torch.clamp(x_adv, 0.0, 1.0), requires_grad=False)
+    # zero gradient
+    optimizer.zero_grad()
+
+    logits = model(normalize(x_natural))
+
+    logits_adv = model(normalize(x_adv))
+
+    adv_probs = F.softmax(logits_adv, dim=1)
+
+    tmp1 = torch.argsort(adv_probs, dim=1)[:, -2:]
+
+    new_y = torch.where(tmp1[:, -1] == y, tmp1[:, -2], tmp1[:, -1])
+
+    loss_adv = F.cross_entropy(logits_adv, y_adv) + F.nll_loss(torch.log(1.0001 - adv_probs + 1e-12), new_y)
+
+    nat_probs = F.softmax(logits, dim=1)
+
+    true_probs = torch.gather(nat_probs, 1, (y.unsqueeze(1)).long()).squeeze()
+
+    loss_robust = (1.0 / batch_size) * torch.sum(
+        torch.sum(kl(torch.log(adv_probs + 1e-12), nat_probs), dim=1) * (1.0000001 - true_probs))
+    loss = loss_adv + float(beta) * loss_robust
+
+    return loss
+
