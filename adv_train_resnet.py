@@ -24,9 +24,9 @@ from models.resnet import *
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR MART Defense')
 parser.add_argument('--attack', default='pgd')
-parser.add_argument('--batch-size', type=int, default=128, metavar='N',
+parser.add_argument('--batch-size', type=int, default=256, metavar='N',
                     help='input batch size for training (default: 128)')
-parser.add_argument('--test-batch-size', type=int, default=100, metavar='N',
+parser.add_argument('--test-batch-size', type=int, default=256, metavar='N',
                     help='input batch size for testing (default: 100)')
 parser.add_argument('--epochs', type=int, default=120, metavar='N',
                     help='number of epochs to train')
@@ -58,7 +58,7 @@ parser.add_argument('--save-freq', '-s', default=1, type=int, metavar='N',
 args = parser.parse_args()
 
 
-model_dir = "checkpoint/" + args.attack + "/"
+model_dir = "results/" + args.attack + "/"
 
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
@@ -249,6 +249,8 @@ def main():
     natural_acc = []
     robust_acc = []
     
+    best_test_robust_acc = 0
+    
     for epoch in range(1, args.epochs + 1):
         # adjust learning rate for SGD
         adjust_learning_rate(optimizer, epoch)
@@ -271,10 +273,19 @@ def main():
         print("Test Robust Accuracy: ", test_robust_accuracy)
         print('==============')
 
+        
+        # save best
+        if test_robust_accuracy > best_test_robust_acc:
+            torch.save({
+                    'state_dict':model.state_dict(),
+                    'test_robust_acc':test_robust_accuracy,
+                    'test_accuracy':test_accuracy,
+                }, os.path.join(model_dir, f'model_best.pth'))
+            best_test_robust_acc = test_robust_accuracy
+        
         # save checkpoint
-        if epoch % args.save_freq == 0:
-            torch.save(model.state_dict(),
-                       os.path.join(model_dir, 'res18-epoch{}.pt'.format(epoch)))
+#         if epoch % args.save_freq == 0:
+#                 torch.save(model.state_dict(), os.path.join(model_dir, 'res18-epoch{}.pt'.format(epoch)))
 
 
 if __name__ == '__main__':
