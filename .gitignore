@@ -103,7 +103,6 @@ demo/pics/*
 *.gz
 *.npy
 *.npz
-*.ipynb
 .DS_Store
 
 # ignore PyCharm project files
@@ -114,7 +113,7 @@ demo/pics/*
 #!notebooks/adaptive_defence_evaluations/*.ipynb
 #!notebooks/adversarial_patch/*.ipynb
 #!notebooks/art_evaluations/*.ipynb
-!evaluation-metric.ipynb
+
 
 log
 checkpoint
