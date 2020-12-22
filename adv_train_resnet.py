@@ -24,6 +24,8 @@ from models.resnet import *
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR MART Defense')
 parser.add_argument('--attack', default='pgd')
+parser.add_argument('--oversample', action='store_true', default=False,
+                    help='oversample training data')
 parser.add_argument('--batch-size', type=int, default=256, metavar='N',
                     help='input batch size for training (default: 128)')
 parser.add_argument('--test-batch-size', type=int, default=256, metavar='N',
@@ -67,8 +69,11 @@ torch.manual_seed(args.seed)
 device = torch.device("cuda" if use_cuda else "cpu")
 kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
 
+def transpose(x, source='NHWC', target='NCHW'):
+    return x.transpose([source.index(d) for d in target]) 
+
 class Batches():
-    def __init__(self, dataset, batch_size, shuffle, set_random_choices=False, drop_last=False):
+    def __init__(self, dataset, batch_size, shuffle=False, set_random_choices=False, drop_last=False):
         self.dataset = dataset
         self.batch_size = batch_size
         self.set_random_choices = set_random_choices
@@ -97,25 +102,73 @@ transform_test = transforms.Compose([
 train_set = torchvision.datasets.CIFAR10(root='../data', train=True, download=True, transform=transform_train)
 test_set = torchvision.datasets.CIFAR10(root='../data', train=False, download=True, transform=transform_test)
 
-# train_loader = torch.utils.data.DataLoader(trainset, batch_size=args.batch_size, shuffle=True, **kwargs)
-# test_loader = torch.utils.data.DataLoader(testset, batch_size=args.test_batch_size, shuffle=False, **kwargs)
+if args.attack == "all" :
+    train_data = np.array(train_set.data) / 255.
+    train_data = transpose(train_data).astype(np.float32)
 
-train_batches = Batches(train_set, args.batch_size, shuffle=False)
+    train_labels = np.array(train_set.targets)
+
+    oversampled_train_data = train_data.copy()
+    oversampled_train_labels = train_labels.copy()
+
+    for i in range(10) :
+        oversampled_train_data = np.concatenate((oversampled_train_data, train_data))
+        oversampled_train_labels = np.concatenate((oversampled_train_labels, train_labels))
+
+    # print("Shape")
+    # print(oversampled_train_data.shape)
+    # print(oversampled_train_labels.shape)
+    train_set = list(zip(torch.from_numpy(oversampled_train_data), torch.from_numpy(oversampled_train_labels)))
+
+
+train_batches = Batches(train_set, args.batch_size, shuffle=True)
 test_batches = Batches(test_set, args.batch_size, shuffle=False)
 
 
 # load adversarial examples
-adv_dir = "adv_examples/{}/".format(args.attack)
-train_path = adv_dir + "train.pth" 
-test_path = adv_dir + "test.pth"
 
-adv_train_data = torch.load(train_path)
-train_adv_images = adv_train_data["adv"]
-train_adv_labels = adv_train_data["label"]
+train_adv_images = None
+train_adv_labels = None
+test_adv_images = None
+test_adv_labels = None
 
-adv_test_data = torch.load(test_path)
-test_adv_images = adv_test_data["adv"]
-test_adv_labels = adv_test_data["label"]
+
+if args.attack != "all" :
+    adv_dir = "adv_examples/{}/".format(args.attack)
+    train_path = adv_dir + "train.pth" 
+    test_path = adv_dir + "test.pth"
+
+    adv_train_data = torch.load(train_path)
+    train_adv_images = adv_train_data["adv"]
+    train_adv_labels = adv_train_data["label"]
+
+    adv_test_data = torch.load(test_path)
+    test_adv_images = adv_test_data["adv"]
+    test_adv_labels = adv_test_data["label"]
+else :
+    ATTACK_LIST = ["autoattack", "autopgd", "bim", "cw", "deepfool", "fgsm", "newtonfool", "pgd", "pixelattack", "spatialtransformation", "squareattack"]
+    for i in range(len(ATTACK_LIST)):
+        _adv_dir = "adv_examples/{}/".format(ATTACK_LIST[i])
+        train_path = _adv_dir + "train.pth" 
+        test_path = _adv_dir + "test.pth"
+
+        adv_train_data = torch.load(train_path)
+        adv_test_data = torch.load(test_path)
+
+        if i == 0 :
+            train_adv_images = adv_train_data["adv"]
+            train_adv_labels = adv_train_data["label"]
+            test_adv_images = adv_test_data["adv"]
+            test_adv_labels = adv_test_data["label"]   
+        else :
+            train_adv_images = np.concatenate((train_adv_images, adv_train_data["adv"]))
+            train_adv_labels = np.concatenate((train_adv_labels, adv_train_data["label"]))
+            test_adv_images = np.concatenate((test_adv_images, adv_test_data["adv"]))
+            test_adv_labels = np.concatenate((test_adv_labels, adv_test_data["label"]))
+
+print("Shape")
+print(train_adv_images.shape)
+print(test_adv_images.shape)
 
 train_adv_set = list(zip(train_adv_images,
     train_adv_labels))
@@ -126,8 +179,6 @@ test_adv_set = list(zip(test_adv_images,
     test_adv_labels))
 
 test_adv_batches = Batches(test_adv_set, args.batch_size, shuffle=False)
-
-
 
 
 def train(args, model, device, train_batches, train_adv_batches, optimizer, epoch):
