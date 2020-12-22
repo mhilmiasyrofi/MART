@@ -17,13 +17,11 @@ import time
 
 from models.resnet import *
 
-
-
-
 # os.environ["CUDA_VISIBLE_DEVICES"]="0"
 
 parser = argparse.ArgumentParser(description='PyTorch CIFAR MART Defense')
 parser.add_argument('--attack', default='pgd')
+parser.add_argument('--list', default='autopgd_pixelattack')
 parser.add_argument('--oversample', action='store_true', default=False,
                     help='oversample training data')
 parser.add_argument('--batch-size', type=int, default=256, metavar='N',
@@ -60,7 +58,11 @@ parser.add_argument('--save-freq', '-s', default=1, type=int, metavar='N',
 args = parser.parse_args()
 
 
-model_dir = "results/" + args.attack + "/"
+model_dir = None
+if args.attack == "combine" :
+    model_dir = "results/" + args.attack + "/" + args.list + "/"
+else :
+    model_dir = "results/" + args.attack + "/"
 
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
@@ -120,6 +122,25 @@ if args.attack == "all" :
     # print(oversampled_train_labels.shape)
     train_set = list(zip(torch.from_numpy(oversampled_train_data), torch.from_numpy(oversampled_train_labels)))
 
+elif args.attack == "combine" :
+    train_data = np.array(train_set.data) / 255.
+    train_data = transpose(train_data).astype(np.float32)
+
+    train_labels = np.array(train_set.targets)
+
+    oversampled_train_data = train_data.copy()
+    oversampled_train_labels = train_labels.copy()
+
+    print("Attacks")
+    attacks = args.list.split("_")
+    print(attacks)
+
+    for i in range(len(attacks)-1) :
+        oversampled_train_data = np.concatenate((oversampled_train_data, train_data))
+        oversampled_train_labels = np.concatenate((oversampled_train_labels, train_labels))
+
+    train_set = list(zip(torch.from_numpy(oversampled_train_data), torch.from_numpy(oversampled_train_labels))) 
+
 
 train_batches = Batches(train_set, args.batch_size, shuffle=True)
 test_batches = Batches(test_set, args.batch_size, shuffle=False)
@@ -133,19 +154,7 @@ test_adv_images = None
 test_adv_labels = None
 
 
-if args.attack != "all" :
-    adv_dir = "adv_examples/{}/".format(args.attack)
-    train_path = adv_dir + "train.pth" 
-    test_path = adv_dir + "test.pth"
-
-    adv_train_data = torch.load(train_path)
-    train_adv_images = adv_train_data["adv"]
-    train_adv_labels = adv_train_data["label"]
-
-    adv_test_data = torch.load(test_path)
-    test_adv_images = adv_test_data["adv"]
-    test_adv_labels = adv_test_data["label"]
-else :
+if args.attack == "all" :
     ATTACK_LIST = ["autoattack", "autopgd", "bim", "cw", "deepfool", "fgsm", "newtonfool", "pgd", "pixelattack", "spatialtransformation", "squareattack"]
     for i in range(len(ATTACK_LIST)):
         _adv_dir = "adv_examples/{}/".format(ATTACK_LIST[i])
@@ -165,6 +174,42 @@ else :
             train_adv_labels = np.concatenate((train_adv_labels, adv_train_data["label"]))
             test_adv_images = np.concatenate((test_adv_images, adv_test_data["adv"]))
             test_adv_labels = np.concatenate((test_adv_labels, adv_test_data["label"]))
+
+elif args.attack == "combine" :
+    print("Attacks")
+    attacks = args.list.split("_")
+    print(attacks)
+
+    for i in range(len(attacks)):
+        _adv_dir = "adv_examples/{}/".format(attacks[i])
+        train_path = _adv_dir + "train.pth" 
+        test_path = _adv_dir + "test.pth"
+
+        adv_train_data = torch.load(train_path)
+        adv_test_data = torch.load(test_path)
+
+        if i == 0 :
+            train_adv_images = adv_train_data["adv"]
+            train_adv_labels = adv_train_data["label"]
+            test_adv_images = adv_test_data["adv"]
+            test_adv_labels = adv_test_data["label"]   
+        else :
+            train_adv_images = np.concatenate((train_adv_images, adv_train_data["adv"]))
+            train_adv_labels = np.concatenate((train_adv_labels, adv_train_data["label"]))
+            test_adv_images = np.concatenate((test_adv_images, adv_test_data["adv"]))
+            test_adv_labels = np.concatenate((test_adv_labels, adv_test_data["label"]))
+else :
+    adv_dir = "adv_examples/{}/".format(args.attack)
+    train_path = adv_dir + "train.pth" 
+    test_path = adv_dir + "test.pth"
+
+    adv_train_data = torch.load(train_path)
+    train_adv_images = adv_train_data["adv"]
+    train_adv_labels = adv_train_data["label"]
+
+    adv_test_data = torch.load(test_path)
+    test_adv_images = adv_test_data["adv"]
+    test_adv_labels = adv_test_data["label"]
 
 print("Shape")
 print(train_adv_images.shape)
