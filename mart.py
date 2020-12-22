@@ -98,7 +98,7 @@ def modified_mart_loss(model,
 
     tmp1 = torch.argsort(adv_probs, dim=1)[:, -2:]
 
-    new_y = torch.where(tmp1[:, -1] == y, tmp1[:, -2], tmp1[:, -1])
+    new_y = torch.where(tmp1[:, -1] == y_adv, tmp1[:, -2], tmp1[:, -1])
 
     loss_adv = F.cross_entropy(logits_adv, y_adv) + F.nll_loss(torch.log(1.0001 - adv_probs + 1e-12), new_y)
 
