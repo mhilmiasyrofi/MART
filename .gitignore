@@ -122,4 +122,4 @@ models/state_dicts/
 resnet/
 plot/
 results/
-
+trained_models/
