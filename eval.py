@@ -128,7 +128,7 @@ def main():
     if args.awp_gamma <= 0.0:
         args.awp_warmup = np.infty
     
-    fname = "results/" + args.train_adversarial + "/"
+    fname = "trained_models/" + args.train_adversarial + "/"
     if not os.path.exists(fname):
         os.makedirs(fname)
     

@@ -60,9 +60,9 @@ args = parser.parse_args()
 
 model_dir = None
 if args.attack == "combine" :
-    model_dir = "results/" + args.attack + "/" + args.list + "/"
+    model_dir = "trained_models/" + args.attack + "/" + args.list + "/"
 else :
-    model_dir = "results/" + args.attack + "/"
+    model_dir = "trained_models/" + args.attack + "/"
 
 if not os.path.exists(model_dir):
     os.makedirs(model_dir)
