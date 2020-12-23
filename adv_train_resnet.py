@@ -1,13 +1,15 @@
 from __future__ import print_function
+import logging
 import os
 import argparse
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torchvision
 import torch.optim as optim
-from torchvision import datasets, transforms
 from torch.autograd import Variable
+
+import torchvision
+from torchvision import datasets, transforms
 
 from wideresnet import *
 from resnet import *
@@ -71,6 +73,18 @@ torch.manual_seed(args.seed)
 device = torch.device("cuda" if use_cuda else "cpu")
 kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
 
+logger = logging.getLogger(__name__)
+logging.basicConfig(
+    format='[%(asctime)s] - %(message)s',
+    datefmt='%Y/%m/%d %H:%M:%S',
+    level=logging.DEBUG,
+    handlers=[
+        logging.FileHandler(os.path.join(model_dir, "output.log")),
+        logging.StreamHandler()
+    ])
+
+logger.info(args)
+
 def transpose(x, source='NHWC', target='NCHW'):
     return x.transpose([source.index(d) for d in target]) 
 
@@ -131,16 +145,15 @@ elif args.attack == "combine" :
     oversampled_train_data = train_data.copy()
     oversampled_train_labels = train_labels.copy()
 
-    print("Attacks")
+    logger.info("Attacks")
     attacks = args.list.split("_")
-    print(attacks)
+    logger.info(attacks)
 
     for i in range(len(attacks)-1) :
         oversampled_train_data = np.concatenate((oversampled_train_data, train_data))
         oversampled_train_labels = np.concatenate((oversampled_train_labels, train_labels))
 
     train_set = list(zip(torch.from_numpy(oversampled_train_data), torch.from_numpy(oversampled_train_labels))) 
-
 
 train_batches = Batches(train_set, args.batch_size, shuffle=True)
 test_batches = Batches(test_set, args.batch_size, shuffle=False)
@@ -211,9 +224,9 @@ else :
     test_adv_images = adv_test_data["adv"]
     test_adv_labels = adv_test_data["label"]
 
-print("Shape")
-print(train_adv_images.shape)
-print(test_adv_images.shape)
+logger.info("Shape")
+logger.info(train_adv_images.shape)
+logger.info(test_adv_images.shape)
 
 train_adv_set = list(zip(train_adv_images,
     train_adv_labels))
@@ -327,8 +340,8 @@ def eval_adv_test_whitebox(model, device, test_loader):
         err_natural, err_robust = _pgd_whitebox(model, X, y)
         robust_err_total += err_robust
         natural_err_total += err_natural
-    print('natural_acc: ', 1 - natural_err_total / len(test_loader.dataset))
-    print('robust_acc: ', 1- robust_err_total / len(test_loader.dataset))
+    logger.info('natural_acc: ', 1 - natural_err_total / len(test_loader.dataset))
+    logger.info('robust_acc: ', 1- robust_err_total / len(test_loader.dataset))
     return 1 - natural_err_total / len(test_loader.dataset), 1- robust_err_total / len(test_loader.dataset)
 
 
@@ -357,17 +370,17 @@ def main():
         train(args, model, device, train_batches, train_adv_batches, optimizer, epoch)
 
         # evaluation on natural examples
-        print('==============')
+        logger.info('==============')
         _, train_accuracy = evaluate(model, device, train_batches)
         _, test_accuracy = evaluate(model, device, test_batches)
         _, train_robust_accuracy = evaluate(model, device, train_adv_batches)
         _, test_robust_accuracy = evaluate(model, device, test_adv_batches)
 
-        print("Train Accuracy: ", train_accuracy)
-        print("Test Accuracy: ", test_accuracy)
-        print("Train Robust Accuracy: ", train_robust_accuracy)
-        print("Test Robust Accuracy: ", test_robust_accuracy)
-        print('==============')
+        logger.info("Train Accuracy: ", train_accuracy)
+        logger.info("Test Accuracy: ", test_accuracy)
+        logger.info("Train Robust Accuracy: ", train_robust_accuracy)
+        logger.info("Test Robust Accuracy: ", test_robust_accuracy)
+        logger.info('==============')
 
         
         # save best
